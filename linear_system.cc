@@ -76,8 +76,6 @@ bool LinearSystem::Iterate() {
     this->last_leaving_variable_ = clashing_variable;
     std::cout << this->StateToString() << std::endl;
   }
-  int x = 0;
-  std::cin >> x;
   iteration_++;
   return false;
 }
