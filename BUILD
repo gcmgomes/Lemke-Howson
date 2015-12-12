@@ -37,3 +37,16 @@ cc_binary(
   srcs = ["linear_system_test.cc"],
   deps = ["//:linear_system"],
 )
+
+cc_library(
+  name = "heuristic",
+  srcs = ["heuristic.cc"],
+  hdrs = ["heuristic.h"],
+  deps = ["//:linear_system"],
+)
+
+cc_binary(
+  name = "heuristic_test",
+  srcs = ["heuristic_test.cc"],
+  deps = ["//:heuristic"],
+)

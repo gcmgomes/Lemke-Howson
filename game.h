@@ -1,3 +1,5 @@
+#ifndef _LEMKE_HOWSON_GAME_H_
+#define _LEMKE_HOWSON_GAME_H_
 #include <cstdlib>
 #include <cstdio>
 #include <iostream>
@@ -9,6 +11,13 @@ struct Payoff {
   Payoff() : Payoff(0, 0){};
   double p1;
   double p2;
+
+  bool operator<(const Payoff& p) const {
+    if (this->p1 == p.p1) {
+      return this->p2 < p.p2;
+    }
+    return this->p1 < p.p1;
+  }
 };
 
 class Game {
@@ -24,7 +33,7 @@ class Game {
   }
 
   size_t m() const {
-    if(n()) {
+    if (n()) {
       return payoffs_.front().size();
     }
     return 0;
@@ -48,3 +57,4 @@ class Game {
   // The matrix representing the game in normal form.
   std::vector<std::vector<Payoff> > payoffs_;
 };
+#endif

@@ -5,12 +5,15 @@
 #include <sstream>
 #include "linear_system.h"
 
-LinearSystem::LinearSystem(Game* game) : LinearSystem(game, 0) {
+LinearSystem::LinearSystem(Game* game) : LinearSystem(game, 0, false) {
 }
 
-LinearSystem::LinearSystem(Game* game, int first_entering_variable)
-    : game_(game), last_leaving_variable_(-first_entering_variable) {
+LinearSystem::LinearSystem(Game* game, int first_entering_variable,
+                           bool verbose)
+    : game_(game), verbose_(verbose) {
   iteration_ = 0;
+  last_leaving_variable_ =
+      std::min(first_entering_variable, -first_entering_variable);
   Initialize();
 }
 
@@ -48,33 +51,47 @@ static int RandomVariable(int total) {
 
 bool LinearSystem::Iterate() {
   int n = this->game_->n(), m = this->game_->m();
-  std::cout << "At iteration i = " << iteration_ << std::endl;
-  std::cout << "Last leaving variable = "
-            << LinearEquation::Variable(last_leaving_variable_, n, m)
-            << std::endl;
+  if (verbose_) {
+    std::cout << "At iteration i = " << iteration_ << std::endl;
+    std::cout << "Last leaving variable = "
+              << LinearEquation::Variable(last_leaving_variable_, n, m)
+              << std::endl;
+  }
   if (IsSatisfied()) {
     return true;
   } else if (!iteration_ && !last_leaving_variable_) {
     this->last_leaving_variable_ = -RandomVariable(n + m);
   } else if (iteration_) {
     int entering_variable = -this->last_leaving_variable_;
-    std::cout << "Variable "
-              << LinearEquation::Variable(entering_variable, n, m)
-              << " enterng the basis" << std::endl;
+    if (verbose_) {
+      std::cout << "Variable "
+                << LinearEquation::Variable(entering_variable, n, m)
+                << " enterng the basis" << std::endl;
+    }
     int clashing_variable = this->ClashingVariable();
-    std::cout << "Clashed with variable "
-              << LinearEquation::Variable(clashing_variable, n, m) << std::endl;
+    if (verbose_) {
+      std::cout << "Clashed with variable "
+                << LinearEquation::Variable(clashing_variable, n, m)
+                << std::endl;
+    }
     LinearEquation clashing_equation = linear_equations_[clashing_variable];
-    std::cout << "Shifting " << clashing_equation.ToString(n, m) << std::endl;
+    if (verbose_) {
+      std::cout << "Shifting " << clashing_equation.ToString(n, m) << std::endl;
+    }
     linear_equations_.erase(clashing_variable);
     clashing_equation.ChangeLeftHandSide(entering_variable);
-    std::cout << "Inserting " << clashing_equation.ToString(n, m) << std::endl;
+    if (verbose_) {
+      std::cout << "Inserting " << clashing_equation.ToString(n, m)
+                << std::endl;
+    }
     linear_equations_[entering_variable] = clashing_equation;
     this->basis_.erase(clashing_variable);
     this->basis_.insert(entering_variable);
     this->UpdateEquations();
     this->last_leaving_variable_ = clashing_variable;
-    std::cout << this->StateToString() << std::endl;
+    if (verbose_) {
+      std::cout << this->StateToString() << std::endl;
+    }
   }
   iteration_++;
   return false;
@@ -146,9 +163,11 @@ int LinearSystem::ClashingVariable() {
   while (it != candidate_equations.end()) {
     double current_ratio =
         linear_equations_[*it].MinimumRatioTest(next_entering_variable);
-    std::cout << "MRT of "
-              << LinearEquation::Variable(*it, game_->n(), game_->m()) << " is "
-              << current_ratio << std::endl;
+    if (verbose_) {
+      std::cout << "MRT of "
+                << LinearEquation::Variable(*it, game_->n(), game_->m())
+                << " is " << current_ratio << std::endl;
+    }
     int tie_breaker = rand() % 2;
     if (minimum_ratio > current_ratio ||
         (minimum_ratio == current_ratio && tie_breaker)) {
@@ -210,63 +229,85 @@ std::string LinearSystem::StateToString() const {
   return text.str();
 }
 
-std::string LinearSystem::FinalDistribution() const {
+bool LinearSystem::PlayerDistribution(std::vector<double>& distribution,
+                                      bool is_player_1) const {
   int n = this->game_->n(), m = this->game_->m();
-  std::stringstream prob1, prob2, text;
-  std::vector<double> probs(n + m + 1);
+  distribution = (is_player_1) ? std::vector<double>(n + 1, 0)
+                               : std::vector<double>(m + 1, 0);
   int i = 1;
   double sum = 0;
-  while (i <= n) {
-    if (linear_equations_.count(i)) {
-      probs[i] = linear_equations_.at(i).intercept();
-      sum += linear_equations_.at(i).intercept();
+  bool valid = false;
+  while (i < distribution.size()) {
+    int key = (is_player_1) ? i : i + n;
+    if (this->linear_equations_.count(key)) {
+      distribution[i] = linear_equations_.at(key).intercept();
+      sum += distribution[i];
+      valid = true;
     }
     i++;
   }
   i = 1;
+  while (i < distribution.size()) {
+    distribution[i] /= sum;
+    i++;
+  }
+  return valid;
+}
+
+double LinearSystem::ExpectedPayoffs(const std::vector<double>& p1_distribution,
+                                     const std::vector<double>& p2_distribution,
+                                     bool is_player_1) const {
+  int n = this->game_->n(), m = this->game_->m();
+  double payoff = 0;
+  int i = 0;
+  while (i < n) {
+    int j = 0;
+    while (j < m) {
+      double prob = p1_distribution.at(i + 1) * p2_distribution.at(j + 1);
+      double utility = 0;
+      if (is_player_1) {
+        utility = this->game_->payoffs().at(i).at(j).p1;
+      } else {
+        utility = this->game_->payoffs().at(i).at(j).p2;
+      }
+      payoff += utility * prob;
+      j++;
+    }
+    i++;
+  }
+  return payoff;
+}
+
+std::string LinearSystem::FinalDistribution() const {
+  int n = this->game_->n(), m = this->game_->m();
+  std::stringstream prob1, prob2, text;
+  std::vector<double> p1_distribution, p2_distribution;
+  this->PlayerDistribution(p1_distribution, true);
+  this->PlayerDistribution(p2_distribution, false);
+  double p1_payoff =
+      this->ExpectedPayoffs(p1_distribution, p2_distribution, true);
+  double p2_payoff =
+      this->ExpectedPayoffs(p1_distribution, p2_distribution, false);
+  int i = 1;
   prob1 << "Player 1: (";
   while (i <= n) {
     if (i > 1) {
       prob1 << ", ";
     }
-    probs[i] /= sum;
-    prob1 << probs[i];
+    prob1 << p1_distribution[i];
     i++;
   }
-  prob1 << ") | Payoff = ";
-  sum = 0;
-  while (i <= n + m) {
-    if (linear_equations_.count(i)) {
-      probs[i] = linear_equations_.at(i).intercept();
-      sum += linear_equations_.at(i).intercept();
-    }
-    i++;
-  }
-  i = n + 1;
+  prob1 << ") | Payoff = " << p1_payoff;
+  i = 1;
   prob2 << "Player 2: (";
-  while (i <= n + m) {
-    if (i > n+1) {
+  while (i <= m) {
+    if (i > 1) {
       prob2 << ", ";
     }
-    probs[i] /= sum;
-    prob2 << probs[i];
+    prob2 << p2_distribution[i];
     i++;
   }
-  prob2 << ") | Payoff = ";
-  double p1_payoff = 0, p2_payoff = 0;
-  i = 0;
-  while (i < n) {
-    int j = 0;
-    while (j < m) {
-      Payoff p = this->game_->payoffs().at(i).at(j);
-      p1_payoff += p.p1 * probs[i + 1] * probs[n + j + 1];
-      p2_payoff += p.p2 * probs[i + 1] * probs[n + j + 1];
-      j++;
-    }
-    i++;
-  }
-  prob1 << p1_payoff;
-  prob2 << p2_payoff;
+  prob2 << ") | Payoff = " << p2_payoff;
   text << prob1.str() << std::endl << prob2.str() << std::endl;
   return text.str();
 }

@@ -1,3 +1,5 @@
+#ifndef _LEMKE_HOWSON_LINEAR_EQUATION_H_
+#define _LEMKE_HOWSON_LINEAR_EQUATION_H_
 #include <cstdlib>
 #include <cstdio>
 #include <iostream>
@@ -86,3 +88,4 @@ class LinearEquation {
   // own the pointer.
   std::unordered_map<int, std::unordered_set<int> >* variable_index_;
 };
+#endif

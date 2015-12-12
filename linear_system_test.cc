@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
   Game* g = new Game();
   g->Read(file_path);
   g->Print();
-  LinearSystem system(g, 2);
+  LinearSystem system(g, 3, true);
   cout << system.StateToString() << endl;
 
   while(!system.Iterate());
