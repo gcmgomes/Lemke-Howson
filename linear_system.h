@@ -82,8 +82,8 @@ class LinearSystem {
   // The indices of the variables currently in the basis.
   std::unordered_set<int> basis_;
 
-  // The collection of linear equations that compose the system. The key should
-  // be the |lhs| value of the mapped equation.
+  // The collection of linear equations that compose the system. The key is
+  // the |lhs| value of the mapped equation.
   std::unordered_map<int, LinearEquation> linear_equations_;
 
   // A mapping from variables to equations where it exists.
