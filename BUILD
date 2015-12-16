@@ -50,3 +50,8 @@ cc_binary(
   srcs = ["heuristic_test.cc"],
   deps = ["//:heuristic"],
 )
+
+cc_binary(
+  name =  "generator",
+  srcs = ["generator.cc"],
+)

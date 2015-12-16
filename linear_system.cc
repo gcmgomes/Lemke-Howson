@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdlib>
+#include <cassert>
 #include <ctime>
 #include <vector>
 #include <sstream>
@@ -171,6 +172,7 @@ int LinearSystem::ClashingVariable() {
     int tie_breaker = rand() % 2;
     if (minimum_ratio > current_ratio ||
         (minimum_ratio == current_ratio && tie_breaker)) {
+      assert(minimum_ratio != current_ratio);
       next_leaving_variable = *it;
       minimum_ratio = current_ratio;
     }
