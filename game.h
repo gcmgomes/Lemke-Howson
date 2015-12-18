@@ -22,7 +22,7 @@ struct Payoff {
 
 class Game {
  public:
-  Game(){};
+  Game();
 
   const std::vector<std::vector<Payoff> >& payoffs() const {
     return payoffs_;
@@ -39,6 +39,10 @@ class Game {
     return 0;
   }
 
+  double normalizing_payoff() const {
+    return normalizing_payoff_;
+  }
+
   // Reads the game from the file pointed by |file_path|.
   // Let N be the number of lines and M of columns. The file format should be as
   // follows:
@@ -50,10 +54,20 @@ class Game {
   // players B_j. Analogously for Y_(i,j).
   void Read(const std::string& file_path);
 
+  Payoff at(int i, int j) const;
+
   // Writes the contents of the game to the standard output.
   void Print();
 
+  void Normalize();
+
  private:
+  // Determines if normalization happened.
+  bool normalized_;
+
+  // Normalizing value to make the game non-negative.
+  double normalizing_payoff_;
+
   // The matrix representing the game in normal form.
   std::vector<std::vector<Payoff> > payoffs_;
 };

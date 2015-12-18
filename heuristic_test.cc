@@ -23,6 +23,25 @@ string EnumName(int i) {
   return ret_val;
 }
 
+string TargetName(int i) {
+  string ret_val;
+  switch (i) {
+    case 0:
+      ret_val = "Maximizing player 1 payoff";
+      break;
+    case 1:
+      ret_val = "Maximizing player 2 payoff";
+      break;
+    case 2:
+      ret_val = "Minimizing player 1 payoff";
+      break;
+    default:
+      ret_val = "Minimizing player 2 payoff";
+      break;
+  }
+  return ret_val;
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) {
     cout << argv[0] << " [input game]" << endl;
@@ -31,11 +50,9 @@ int main(int argc, char** argv) {
   string file_path(argv[1]);
   Game g;
   g.Read(file_path);
-  g.Print();
   Heuristic heuristic(10, &g);
   heuristic.Run(true);
   heuristic.Run(false);
-  cout << heuristic.ScoresToString() << endl;
   int variable = heuristic.SelectVariable(Heuristic::Mode::SELFISH_MAXIMIZER_1);
   cout << "Best for SELFISH_MAXIMIZER_1 is "
        << LinearEquation::Variable(variable, g.n(), g.m()) << endl;
@@ -57,7 +74,7 @@ int main(int argc, char** argv) {
     while (j < 4) {
       double it_g = 0, p_g = 0;
       heuristic.CalculateGap((Heuristic::Mode)j, variable, it_g, p_g);
-      cout << "Against " << EnumName(j) << ": Iteration Gap = " << it_g
+      cout << "When " << TargetName(j) << ": Iteration Gap = " << it_g
            << "%, Payoff Gap = " << p_g << "%" << endl;
       j++;
     }

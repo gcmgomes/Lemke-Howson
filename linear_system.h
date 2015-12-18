@@ -26,7 +26,7 @@ class LinearSystem {
   }
 
   // Returns true if the stopping conditions are satisfied, false otherwise.
-  bool IsSatisfied();
+  bool IsSatisfied() const;
 
   // Executes the next iteration of the Lemke-Howson algorithm. Each iteration
   // is marked by one variable leaving the basis. Returns true if the system has
@@ -62,9 +62,15 @@ class LinearSystem {
   // Initializes the equation set related to player 2.
   void InitializePlayer2();
 
+  // The basis for the row player of the game.
+  bool BasisPlayer1(std::unordered_set<int>& p1_basis) const;
+
+  // The basis for the column player of the game.
+  bool BasisPlayer2(std::unordered_set<int>& p2_basis) const;
+
   // Returns theequation/variable that presented the smallest Minimum Ratio
   // Test.
-  int ClashingVariable();
+  int ClashingVariable() const;
 
   // Updates every equation after a variable entered the basis.
   void UpdateEquations();
@@ -78,9 +84,6 @@ class LinearSystem {
 
   // If true, prints algorithm progress to stdout.
   bool verbose_;
-
-  // The indices of the variables currently in the basis.
-  std::unordered_set<int> basis_;
 
   // The collection of linear equations that compose the system. The key is
   // the |lhs| value of the mapped equation.

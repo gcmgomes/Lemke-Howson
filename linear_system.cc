@@ -2,8 +2,9 @@
 #include <cstdlib>
 #include <cassert>
 #include <ctime>
-#include <vector>
+#include <set>
 #include <sstream>
+#include <vector>
 #include "linear_system.h"
 
 LinearSystem::LinearSystem(Game* game) : LinearSystem(game, 0, false) {
@@ -11,38 +12,96 @@ LinearSystem::LinearSystem(Game* game) : LinearSystem(game, 0, false) {
 
 LinearSystem::LinearSystem(Game* game, int first_entering_variable,
                            bool verbose)
-    : game_(game), verbose_(verbose) {
+    : verbose_(verbose), game_(game) {
   iteration_ = 0;
   last_leaving_variable_ =
       std::min(first_entering_variable, -first_entering_variable);
   Initialize();
 }
 
-bool LinearSystem::IsSatisfied() {
-  bool res = false;
-  if (iteration_) {
-    int i = 1;
-    int n = game_->n(), m = game_->m();
-    bool all = true;
-    while (i <= n) {
-      all = all && (basis_.count(i) || basis_.count(-i));
-      res = res || basis_.count(i);
-      i++;
-    }
-    if (!res || !all) {
-      return false;
-    }
-    res = false;
-    while (i <= n + m) {
-      all = all && (basis_.count(i) || basis_.count(-i));
-      res = res || basis_.count(i);
-      i++;
-    }
-    if (!all) {
-      return false;
-    }
+/* static void Cands(const std::unordered_set<int>& s, int n, int m) {
+  auto it = s.cbegin();
+  while (it != s.cend()) {
+    std::cout << LinearEquation::Variable(*it, n, m) << " ";
+    ++it;
   }
-  return res;
+  std::cout << std::endl;
+}
+
+static void PrintIndex(
+    const std::unordered_map<int, std::unordered_set<int> >& index, int n,
+    int m) {
+  auto it = index.begin();
+  while (it != index.end()) {
+    std::cout << "Candidates for " << LinearEquation::Variable(it->first, n, m)
+              << " are: ";
+    Cands(it->second, n, m);
+    ++it;
+  }
+} */
+
+bool LinearSystem::BasisPlayer1(std::unordered_set<int>& p1_basis) const {
+  int n = game_->n(), m = game_->m();
+  std::vector<double> p1_distribution;
+  int i = 1;
+  while (i <= n) {
+    if (!linear_equations_.count(i)) {  // x_i is not in the support.
+      p1_basis.insert(i);
+    }
+    i++;
+  }
+  int j = 1;
+  while (j <= m) {
+    if (!linear_equations_.count(-j-n)) {  // s_j is 0'd -> y_j is a best response
+      p1_basis.insert(j + n);
+    }
+    j++;
+  }
+  return true;
+}
+
+bool LinearSystem::BasisPlayer2(std::unordered_set<int>& p2_basis) const {
+  int n = game_->n(), m = game_->m();
+  std::vector<double> p2_distribution;
+  int j = 1;
+  while (j <= m) {
+    if (!linear_equations_.count(j + n)) {  // y_j is not in the support
+      p2_basis.insert(j + n);
+    }
+    j++;
+  }
+  int i = 1;
+  while (i <= n) {
+    if (!linear_equations_.count(-i)) {  // r_i is 0'd -> x_i is a best response
+      p2_basis.insert(i);
+    }
+    i++;
+  }
+  return true;
+}
+
+bool LinearSystem::IsSatisfied() const {
+  if (!iteration_) {
+    return false;
+  }
+  std::unordered_set<int> p1_basis, p2_basis, basis;
+  if (!BasisPlayer1(p1_basis)) {
+    return false;
+  }
+  if (!BasisPlayer2(p2_basis)) {
+    return false;
+  }
+  auto it = p1_basis.begin();
+  while (it != p1_basis.end()) {
+    basis.insert(*it);
+    ++it;
+  }
+  it = p2_basis.begin();
+  while (it != p2_basis.end()) {
+    basis.insert(*it);
+    ++it;
+  }
+  return (basis.size() == (game_->n() + game_->m()));
 }
 
 static int RandomVariable(int total) {
@@ -60,9 +119,9 @@ bool LinearSystem::Iterate() {
   }
   if (IsSatisfied()) {
     return true;
-  } else if (!iteration_ && !last_leaving_variable_) {
+  } else if (!last_leaving_variable_) {
     this->last_leaving_variable_ = -RandomVariable(n + m);
-  } else if (iteration_) {
+  } else {
     int entering_variable = -this->last_leaving_variable_;
     if (verbose_) {
       std::cout << "Variable "
@@ -70,25 +129,27 @@ bool LinearSystem::Iterate() {
                 << " enterng the basis" << std::endl;
     }
     int clashing_variable = this->ClashingVariable();
-    if (verbose_) {
-      std::cout << "Clashed with variable "
-                << LinearEquation::Variable(clashing_variable, n, m)
-                << std::endl;
+    if (clashing_variable) {
+      if (verbose_) {
+        std::cout << "Clashed with variable "
+                  << LinearEquation::Variable(clashing_variable, n, m)
+                  << std::endl;
+      }
+      LinearEquation clashing_equation = linear_equations_[clashing_variable];
+      if (verbose_) {
+        std::cout << "Shifting " << clashing_equation.ToString(n, m)
+                  << std::endl;
+      }
+      linear_equations_.erase(clashing_variable);
+      clashing_equation.ChangeLeftHandSide(entering_variable);
+      if (verbose_) {
+        std::cout << "Inserting " << clashing_equation.ToString(n, m)
+                  << std::endl;
+      }
+      linear_equations_[entering_variable] = clashing_equation;
+      this->UpdateEquations();
+      this->variable_index_.erase(entering_variable);
     }
-    LinearEquation clashing_equation = linear_equations_[clashing_variable];
-    if (verbose_) {
-      std::cout << "Shifting " << clashing_equation.ToString(n, m) << std::endl;
-    }
-    linear_equations_.erase(clashing_variable);
-    clashing_equation.ChangeLeftHandSide(entering_variable);
-    if (verbose_) {
-      std::cout << "Inserting " << clashing_equation.ToString(n, m)
-                << std::endl;
-    }
-    linear_equations_[entering_variable] = clashing_equation;
-    this->basis_.erase(clashing_variable);
-    this->basis_.insert(entering_variable);
-    this->UpdateEquations();
     this->last_leaving_variable_ = clashing_variable;
     if (verbose_) {
       std::cout << this->StateToString() << std::endl;
@@ -99,11 +160,6 @@ bool LinearSystem::Iterate() {
 }
 
 void LinearSystem::Initialize() {
-  int i = 1, n = game_->n(), m = game_->m();
-  while (i <= n + m) {
-    basis_.insert(-i);
-    i++;
-  }
   InitializePlayer1();
   InitializePlayer2();
 }
@@ -144,26 +200,20 @@ void LinearSystem::InitializePlayer2() {
   }
 }
 
-static void Cands(const std::unordered_set<int>& s, int n, int m) {
-  auto it = s.cbegin();
-  while (it != s.cend()) {
-    std::cout << LinearEquation::Variable(*it, n, m) << " ";
-    ++it;
-  }
-  std::cout << std::endl;
-}
-
-int LinearSystem::ClashingVariable() {
+int LinearSystem::ClashingVariable() const {
   int next_entering_variable =
       -last_leaving_variable_;  // We have to look at the dual of
                                 // |last_leaving_variable_|
-  auto candidate_equations = variable_index_[next_entering_variable];
+  if (!variable_index_.count(next_entering_variable)) {
+    return 0;
+  }
+  auto candidate_equations = variable_index_.at(next_entering_variable);
   auto it = candidate_equations.begin();
   int next_leaving_variable = 0;
   double minimum_ratio = (1 << 30);
   while (it != candidate_equations.end()) {
     double current_ratio =
-        linear_equations_[*it].MinimumRatioTest(next_entering_variable);
+        linear_equations_.at(*it).MinimumRatioTest(next_entering_variable);
     if (verbose_) {
       std::cout << "MRT of "
                 << LinearEquation::Variable(*it, game_->n(), game_->m())
@@ -192,40 +242,60 @@ void LinearSystem::UpdateEquations() {
   }
 }
 
-static void ToOrderedSet(const std::unordered_map<int, LinearEquation>& eqs,
-                         std::vector<std::pair<int, int> >& o_basis) {
-  auto it = eqs.begin();
-  while (it != eqs.end()) {
-    o_basis.push_back(std::make_pair(it->second.id(), it->first));
+static void ToOrderedSet(const std::unordered_set<int>& basis,
+                         std::set<int>& o_basis) {
+  auto it = basis.begin();
+  while (it != basis.end()) {
+    o_basis.insert(*it);
     ++it;
   }
-  std::sort(o_basis.begin(), o_basis.end());
 }
 
 std::string LinearSystem::StateToString() const {
   std::stringstream text;
-  text << "Basis = {";
-  std::vector<std::pair<int, int> > o_basis;
-  ToOrderedSet(linear_equations_, o_basis);
-  auto o_it = o_basis.begin();
-  while (o_it != o_basis.end()) {
-    if (o_it != o_basis.begin()) {
+  text << "Basis = {{";
+  std::unordered_set<int> p1_basis, p2_basis;
+  std::set<int> o_p1_basis, o_p2_basis;
+  if (BasisPlayer1(p1_basis)) {
+    ToOrderedSet(p1_basis, o_p1_basis);
+  }
+  if (BasisPlayer2(p2_basis)) {
+    ToOrderedSet(p2_basis, o_p2_basis);
+  }
+  auto o_it = o_p1_basis.begin();
+  while (o_it != o_p1_basis.end()) {
+    if (o_it != o_p1_basis.begin()) {
       text << ", ";
     }
-    text << o_it->second;
+    text << *o_it;
     ++o_it;
   }
-  text << "}" << std::endl;
+  text << "}, {";
+  o_it = o_p2_basis.begin();
+  while (o_it != o_p2_basis.end()) {
+    if (o_it != o_p2_basis.begin()) {
+      text << ", ";
+    }
+    text << *o_it;
+    ++o_it;
+  }
+  text << "}}" << std::endl;
+
   int n = this->game_->n(), m = this->game_->m();
-  o_it = o_basis.begin();
   int i = 1;
-  while (o_it != o_basis.end()) {
-    text << linear_equations_.at(o_it->second).ToString(n, m) << std::endl;
+  while (i <= n + m) {
+    auto eq_it = linear_equations_.cbegin();
+    while (eq_it != linear_equations_.cend()) {
+      if (eq_it->second.id() == i) {
+        break;
+      }
+      ++eq_it;
+    }
+    text << eq_it->second.ToString(n, m) << std::endl;
     if (i == n) {
       text << std::endl;
     }
     i++;
-    ++o_it;
   }
   text << std::endl;
   return text.str();
@@ -277,7 +347,7 @@ double LinearSystem::ExpectedPayoffs(const std::vector<double>& p1_distribution,
     }
     i++;
   }
-  return payoff;
+  return payoff + game_->normalizing_payoff();
 }
 
 std::string LinearSystem::FinalDistribution() const {
